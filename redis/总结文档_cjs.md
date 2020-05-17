@@ -98,4 +98,261 @@ func (self *RedisLock) Lock() (bool, error) {
 
 ![img](https://mmbiz.qpic.cn/mmbiz/Fb60NIoTYzZGgmXb1mjKvE0EkX4IhomzBxOlEHvbLFQXDGiaMAqFlaj6jBV0Iia0xJj8IeDWybaYcttZY2wzW4rA/640?wx_fmt=other&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
 
-- 
+> 因为有了设计加锁的经验，我们应该尽量对解锁的所有操作都实现原子性，但是目前官方并没有类似于setnx这种好用的方式，所以我们需要借用lua脚本来达到原子性解锁操作
+
+```lua
+if redis.call('get',KEYS[1])==ARGV[1] 
+    then return redis.call('del',KEYS[1]) 
+else return 0 end
+```
+
+- 上面这个脚本中,我们通过获取key对应的value如果等于我们当前的id,那就删除,否则的话则返回0
+- 我们通过代码实现
+
+```go
+const script = "if redis.call('get',KEYS[1]) == ARGV[1] then" +
+	"   return redis.call('del',KEYS[1]) " +
+	"else" +
+	"   return 0 " +
+	"end"
+func (self *RedisLock) UnLock() (bool, error) {
+	eval := redisClient.Clinet.Eval(script, []string{self.TypeStr}, []string{self.UUID})
+	val, err := eval.Int()
+	if err != nil {
+		fmt.Println(err.Error())
+		return false, err
+	} else if val == 1 {
+		return true, nil
+	} else {
+		return false, errors.New("取消分布式锁失败")
+	}
+}
+```
+
+### 测试
+
+#### client.go
+
+```go
+// redis_demo/redisClient/client.go
+/*
+@Time :  2020-05-15 16:26
+@Author : Caden
+@File : client
+@Software: GoLand
+*/
+package redisClient
+
+import (
+	"github.com/go-redis/redis"
+)
+
+var Clinet *redis.Client
+
+func init() {
+	Clinet = redis.NewClient(&redis.Options{
+		Password: "paswd",
+		Addr:     "ip:port",
+	})
+}
+
+```
+
+
+
+#### redisLock.go
+
+```go
+// redis_demo/redisClient/distributedLock/redisLock.go
+/*
+@Time :  2020-05-15 16:42
+@Author : Caden
+@File : redisLock
+@Software: GoLand
+*/
+package distributedLock
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	uuid "github.com/satori/go.uuid"
+	"redis_demo/redisClient"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+/**
+要实现一个redis分布式锁
+	1.支持获取锁,成功true,错误返回false
+	2.支持等待获取锁,如果获取到返回true,否则在一小段时间内反复尝试,如果尝试成功,则返回true,否则返回false;
+	3.不能产生死锁的情况
+	4.
+*/
+type RedisLock struct {
+	UUID    string
+	TypeStr string
+}
+
+var Sm sync.Map
+
+const timeOut time.Duration = 500
+
+func GetGoroutineID() uint64 {
+	b := make([]byte, 64)
+	runtime.Stack(b, false)
+	b = bytes.TrimPrefix(b, []byte("goroutine "))
+	b = b[:bytes.IndexByte(b, ' ')]
+	n, _ := strconv.ParseUint(string(b), 10, 64)
+	return n
+}
+
+const script = "if redis.call('get',KEYS[1]) == ARGV[1] then" +
+	"   return redis.call('del',KEYS[1]) " +
+	"else" +
+	"   return 0 " +
+	"end"
+
+func NewRedisLock(typeStr string) *RedisLock {
+	v4 := uuid.NewV4()
+	return &RedisLock{
+		UUID:    v4.String(),
+		TypeStr: typeStr,
+	}
+}
+func (self *RedisLock) Lock() (bool, error) {
+	//SET lock_key random_value NX PX 5000,表示的是 typestr锁定,value是一个uuid,锁定时间10s
+	//nx的方式表示的是,如果这个key存在了,则不会set并且会有错
+	//nx的方式和普通的set方式,如果在于增加了NX标识符,将之前exists,set or exists 这两组操作都变成了原子操作,避免了
+	//加锁不成功的问题
+	for i := 0; i < 5; i++ {
+		set := redisClient.Clinet.SetNX(self.TypeStr, self.UUID, time.Second*10)
+		err := set.Err()
+
+		if err != nil {
+			return false, err
+		}
+		if set.Val() {
+			return true, nil
+		} else {
+			time.Sleep(timeOut * time.Millisecond)
+			//return false, errors.New("无法加锁")
+		}
+	}
+	return false, nil
+}
+func (self *RedisLock) LockV1() (bool, error) {
+	//判断key是否存在
+	exists := redisClient.Clinet.Exists(self.TypeStr)
+	if exists.Val() == 1 {
+		//若存在则证明已经加锁
+		return false, errors.New("已锁")
+	} else {
+		//不存在则设置一个值表示加锁
+		set := redisClient.Clinet.Set(self.TypeStr, self.UUID, time.Second*10)
+		if strings.ToUpper(set.String()) == "OK" {
+			//加锁成功
+			return true, nil
+		} else {
+			return false, errors.New("加锁失败")
+		}
+	}
+}
+func (self *RedisLock) UnLock() (bool, error) {
+	eval := redisClient.Clinet.Eval(script, []string{self.TypeStr}, []string{self.UUID})
+	val, err := eval.Int()
+	if err != nil {
+		fmt.Println(err.Error())
+		return false, err
+	} else if val == 1 {
+		return true, nil
+	} else {
+		return false, errors.New("取消分布式锁失败")
+	}
+}
+
+```
+
+#### main.go
+
+```go
+// redis_demo/main.go
+/*
+@Time :  2020-05-15 16:31
+@Author : Caden
+@File : main
+@Software: GoLand
+*/
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"redis_demo/redisClient/distributedLock"
+	"sync"
+	"time"
+)
+
+func main() {
+	typeSlice := [3]string{"type1", "type2", "type3"}
+	group := sync.WaitGroup{}
+	var f func(int)
+	f = func(i int) {
+		id := distributedLock.GetGoroutineID()
+		lockNum := typeSlice[i%3]
+		lock := distributedLock.NewRedisLock(lockNum)
+		rand.Seed(time.Now().UnixNano())
+		for {
+			intn := rand.Intn(2000)
+			lockSuc, err := lock.Lock()
+			if err != nil {
+				fmt.Println(err)
+			}
+			if lockSuc {
+				//fmt.Printf("%v获取到%v锁了\n", id, lockNum)
+				distributedLock.Sm.Store(id, lockNum)
+				time.Sleep(time.Millisecond * time.Duration(intn))
+				unLock, err := lock.UnLock()
+				if err != nil {
+					fmt.Println(err)
+				}
+				if unLock {
+					distributedLock.Sm.Delete(id)
+					//fmt.Printf("%v解锁成功\n", id)
+				} else {
+					fmt.Printf("%v解锁失败\n", id)
+				}
+			}
+		}
+	}
+	group.Add(1)
+	go func() {
+		for {
+			time.Sleep(time.Millisecond*500)
+			i := 0
+			distributedLock.Sm.Range(func(key, value interface{}) bool {
+				fmt.Printf("value=%v\t", value)
+				i++
+				return true
+			})
+			fmt.Println()
+			if i > 3 {
+				fmt.Printf("出错了\n")
+				distributedLock.Sm.Range(func(key, value interface{}) bool {
+					fmt.Printf("key=%v,value=%v\t", key, value)
+					return true
+				})
+			}
+		}
+	}()
+	for i := 0; i < 100; i++ {
+		go f(i)
+	}
+	group.Wait()
+	fmt.Println("运行结束")
+}
+```
+
