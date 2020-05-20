@@ -356,3 +356,94 @@ func main() {
 }
 ```
 
+## 数据结构[5种]
+
+![image-20200517154706116](upload%5Cimage-20200517154706116.png)
+
+- string
+
+> 二进制安全的,可以存储任何类型的对象。
+>
+> 操作：get，set，del，incr，decr
+>
+> 场景：
+> 	缓存：可以把任意的对象数据序列化之后直接使用**redis**的**string**类型存储到redis服务器中，使用redis作为**缓存层**,持久层使用常用的数据库,可以**降低持久层的读写压力**。
+>
+> ​	计数器：**redis**是单线程模型，可以使用字段的**自增功能**，保证分布式系统的序号计数不重复。
+>
+> ​	session：常见的方案将原本缓存在本地服务中的session存到redis中，通过redis实现session的共享
+>
+> 命令：
+>
+> ```bash
+> 127.0.0.1:6379> AUTH ohaRUIuX
+> OK
+> 127.0.0.1:6379> set hello world
+> OK
+> 127.0.0.1:6379> get hello
+> "world"
+> 127.0.0.1:6379> del hello
+> (integer) 1
+> 127.0.0.1:6379> get count
+> (nil)
+> 127.0.0.1:6379> set count 1
+> OK
+> 127.0.0.1:6379> get count
+> "1"
+> 127.0.0.1:6379> incr count
+> (integer) 2
+> 127.0.0.1:6379> incrby count 100
+> (integer) 102
+> 127.0.0.1:6379> get count
+> "102"
+> 127.0.0.1:6379> DECR count 
+> (integer) 101
+> 127.0.0.1:6379> get count
+> "101"
+> 127.0.0.1:6379> DECRBY count 100
+> (integer) 1
+> ```
+>
+> 
+
+- hash（类似HashMap）
+
+![img](1289934-20190621232209365-1000366002.png)
+
+> 本身就是一种键值对的类型
+>
+> 操作：hget、hset、hdel
+>
+> 场景：
+>
+> ​	缓存： 能直观，相比string更节省空间的维护缓存信息，如用户信息，视频信息等。
+>
+> ```bash
+> 127.0.0.1:6379> hset user name ccccc
+> (integer) 0
+> 127.0.0.1:6379> hget user name
+> "ccccc"
+> 127.0.0.1:6379> HKEYS user
+> 1) "name"
+> 2) "age"
+> 127.0.0.1:6379> hgetall user
+> 1) "name"
+> 2) "ccccc"
+> 3) "age"
+> 4) "26"
+> 127.0.0.1:6379> hdel user name
+> (integer) 1
+> 127.0.0.1:6379> hgetall user
+> 1) "age"
+> 2) "26"
+> ```
+
+- List
+
+![image-20200518203907521](https://raw.githubusercontent.com/huwd5620125/my_pic_pool/master/img/image-20200518203907521.png)
+
+> 实际上就是链表(Linked list),有序的,value可以重复
+
+- Set
+- sorted Set
+- hash

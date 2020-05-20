@@ -1,2 +1,7 @@
- redis 60个面试题
+ redis 60涓潰璇曢
 https://zhuanlan.zhihu.com/p/93515595 
+
+涓夌鐗规畩鏁版嵁绫诲瀷
+
+https://www.cnblogs.com/taozi32/p/11760896.html
+
