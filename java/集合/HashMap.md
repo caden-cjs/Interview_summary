@@ -46,6 +46,8 @@ public V put(K key, V value) {
     }
 ```
 
+![img](https://raw.githubusercontent.com/huwd5620125/my_pic_pool/master/img/8e8203c1b51be6446cda4026eaaccf19_720w.png)
+
 #### hash
 
 ```java
@@ -135,6 +137,25 @@ hash实际上是三步的,取key的hashCode值、高位运算、取模运算。
         return null;
     }
 ```
+
+#### put的小总结
+
+> 1. 判断table是否为空
+>    1. 是：resize（）
+> 2. 则根据key调用key的hashcode()方法，并且通过得到的hash值左移16位和当前数字做移位运算后**(hashcode>>16 ^ hashcode) & 当前的最大长度-1(得到一个除了最高位其他为全为1的二进制数)**相对于%2取模运算 效率要高!,通过前面的计算得到了**索引值i**
+> 3. 判断table[i]的对象是否为null
+>    1. 是:直接将当前的key和value插入到table[i]
+>    2. 否:判断当前key是否存在**链表table[i]**中
+>       1. 是：直接覆盖之前的值
+>       2. 否：判断当前的Node是否是TreeNode？
+>          1. 是：直接将Key和Value插入到TreeNode中
+>          2. 否：开始遍历链表
+>             1. 链表长度是否大于>8
+>                1. 是：将链表转换成红黑树，并且插入键值对
+>                2. 否：如果对应的key存在，则覆盖，否则插入到链表末尾。
+> 4. 插入值之后，会判断当前的容量是否已经大于**(最大容量*负载因子)**，大于则扩容，否则就结束。
+
+
 
 ### resize方法
 
