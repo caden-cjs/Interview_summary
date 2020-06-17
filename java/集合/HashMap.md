@@ -159,8 +159,133 @@ hash实际上是三步的,取key的hashCode值、高位运算、取模运算。
 
 ### resize方法
 
+> 扩容机制,实际上**hashmap**中Node是链表 理论上存储空间是无限的,但是为了权衡查找元素的效率，我们需要一种机制，这就是扩容机制
+>
+> 默认情况下 初始的**hashmap**最大容量是 2^4=16,并且有一个负载因子默认是0.75,都是可以调整的,并且map的容量总是2^n这样的.
+>
+> 通过前面可知**map**中是先通过hash确认元素存放的索引位置,之后再操作链表,那么**map**实际上的瓶颈就是在链表的长度上
+>
+> 所以map在权衡之后引入了**resize**扩容机制。
+>
+> ![img](https://raw.githubusercontent.com/huwd5620125/my_pic_pool/master/img/e5aa99e811d1814e010afa7779b759d4_720w.png)
 
+```java
+//1.7版本
+  1 void resize(int newCapacity) {   //传入新的容量
+ 2     Entry[] oldTable = table;    //引用扩容前的Entry数组
+ 3     int oldCapacity = oldTable.length;         
+ 4     if (oldCapacity == MAXIMUM_CAPACITY) {  //扩容前的数组大小如果已经达到最大(2^30)了
+ 5         threshold = Integer.MAX_VALUE; //修改阈值为int的最大值(2^31-1)，这样以后就不会扩容了
+ 6         return ;
+ 7     }
+ 8  
+ 9     Entry[] newTable = new Entry[newCapacity];  //初始化一个新的Entry数组
+10     transfer(newTable);                         //！！将数据转移到新的Entry数组里
+11     table = newTable;                           //HashMap的table属性引用新的Entry数组
+12     threshold = (int)(newCapacity * loadFactor);//修改阈值
+13 }
+//先用新的数组替换掉老的数组,再通过transfer方法将数据拷贝到新的数组中
 
+1 void transfer(Entry[] newTable) {
+ 2     Entry[] src = table;                   //src引用了旧的Entry数组
+ 3     int newCapacity = newTable.length;
+ 4     for (int j = 0; j < src.length; j++) { //遍历旧的Entry数组
+ 5         Entry<K,V> e = src[j];             //取得旧Entry数组的每个元素
+ 6         if (e != null) {
+ 7             src[j] = null;//释放旧Entry数组的对象引用（for循环后，旧的Entry数组不再引用任何对象）
+ 8             do {
+ 9                 Entry<K,V> next = e.next;
+10                 int i = indexFor(e.hash, newCapacity); //！！重新计算每个元素在数组中的位置
+11                 e.next = newTable[i]; //标记[1]
+12                 newTable[i] = e;      //将元素放在数组上
+13                 e = next;             //访问下一个Entry链上的元素
+14             } while (e != null);
+15         }
+16     }
+17 }
+```
 
+#### 1.8版本
+
+```java
+    final Node<K,V>[] resize() {
+        Node<K,V>[] oldTab = table;//获取当前的数组
+        int oldCap = (oldTab == null) ? 0 : oldTab.length;//获取当前数组长度
+        int oldThr = threshold;//获取当前的阈值
+        int newCap, newThr = 0;//设置新的值用来存放resize之后的数组长度和扩容阈值
+        if (oldCap > 0) {//1:判断当前数组是否大于0
+            if (oldCap >= MAXIMUM_CAPACITY) {
+                //1.1:判断当前数组长度是否大于2^30,如果大于,则不再扩容
+                threshold = Integer.MAX_VALUE;//并且将阈值设置成2^32-1
+                return oldTab;//不扩容
+            }
+            else if ((newCap = oldCap << 1) < MAXIMUM_CAPACITY &&
+                     oldCap >= DEFAULT_INITIAL_CAPACITY)//如果新的容量小于2<30 并且旧的数组长度大于等于16
+                newThr = oldThr << 1; // double threshold,就会对旧的长度*2
+        }
+        else if (oldThr > 0) // 当旧的数组长度=0的时候,那么证明初始化map时设置了长度
+            newCap = oldThr;//所以需要将计算好的oldthr设置成新的数组长度
+        else {               // zero initial threshold signifies using defaults
+            newCap = DEFAULT_INITIAL_CAPACITY;//相当于使用了空参构造器,设置默认的数组长度;16
+            newThr = (int)(DEFAULT_LOAD_FACTOR * DEFAULT_INITIAL_CAPACITY);//设置默认的阈值 16*0.75=12
+        }
+        if (newThr == 0) {//就是说oldthr>0的时候且oldCap=0(就是说初始化resize的时候,且设置了长度),那么newThr到目前为止都没有被扩容过,则使用我们初始化时设置的负载因子
+            float ft = (float)newCap * loadFactor;//计算当前的阈值
+            newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ?
+                      (int)ft : Integer.MAX_VALUE);//判断,当当前的数组容量小于2^30并且新计算的阈值也小于2^30时,则使用新计算的阈值,否则使用2^32-1
+        }
+        threshold = newThr;//将新得到的阈值复制给类变量threshold
+        @SuppressWarnings({"rawtypes","unchecked"})
+            Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
+        table = newTab;//创建一个按照新计算出的长度的数组并且赋值到成员变量table中
+        if (oldTab != null) {//如果旧的table不是空的,就是说不是初始化resize时,会遍历整个map对所有数据重新计算索引位置 并放到新的map中
+            for (int j = 0; j < oldCap; ++j) {
+                Node<K,V> e;
+                if ((e = oldTab[j]) != null) {//判断当前索引位置链表不为空则重新计算位置并copy
+                    oldTab[j] = null;
+                    if (e.next == null)//这个index只有一个数据,计算好新的索引位置 copy
+                        newTab[e.hash & (newCap - 1)] = e;
+                    else if (e instanceof TreeNode)//如果这个node是红黑树,TODO:后面详解
+                        ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
+                    else { // preserve order 否则,则该节点是一个长度不超过8的链表,并且存在值
+                        Node<K,V> loHead = null, loTail = null;//存放索引不变的节点
+                        Node<K,V> hiHead = null, hiTail = null;//存放索引改变的节点
+                        Node<K,V> next;
+                        do {
+                            next = e.next;//通过next遍历链表
+                            if ((e.hash & oldCap) == 0) {// 实际上是计算了高位,若新增的位置和当前值与运算得到的是=,则表示索引位置没变
+                                if (loTail == null)
+                                    loHead = e; 
+                                else
+                                    loTail.next = e;
+                                loTail = e;
+                            }
+                            else {
+                                if (hiTail == null)
+                                    hiHead = e;
+                                else
+                                    hiTail.next = e;
+                                hiTail = e;
+                            }
+                        } while ((e = next) != null);
+                        if (loTail != null) {
+                            loTail.next = null;
+                            newTab[j] = loHead;
+                        }
+                        if (hiTail != null) {
+                            hiTail.next = null;
+                            newTab[j + oldCap] = hiHead;
+                        }
+                    }
+                }
+            }
+        }
+        return newTab;
+    }
+```
+
+![img](https://raw.githubusercontent.com/huwd5620125/my_pic_pool/master/img/a285d9b2da279a18b052fe5eed69afe9_720w.png)
+
+![img](https://raw.githubusercontent.com/huwd5620125/my_pic_pool/master/img/b2cb057773e3d67976c535d6ef547d51_720w.png)
 
 https://zhuanlan.zhihu.com/p/21673805
