@@ -169,6 +169,8 @@ hash实际上是三步的,取key的hashCode值、高位运算、取模运算。
 >
 > ![img](https://raw.githubusercontent.com/huwd5620125/my_pic_pool/master/img/e5aa99e811d1814e010afa7779b759d4_720w.png)
 
+#### 1.7版本
+
 ```java
 //1.7版本
   1 void resize(int newCapacity) {   //传入新的容量
@@ -287,5 +289,64 @@ hash实际上是三步的,取key的hashCode值、高位运算、取模运算。
 ![img](https://raw.githubusercontent.com/huwd5620125/my_pic_pool/master/img/a285d9b2da279a18b052fe5eed69afe9_720w.png)
 
 ![img](https://raw.githubusercontent.com/huwd5620125/my_pic_pool/master/img/b2cb057773e3d67976c535d6ef547d51_720w.png)
+
+### 线程安全性
+
+```java
+public class HashMapInfiniteLoop {  
+
+    private static HashMap<Integer,String> map = new HashMap<Integer,String>(2，0.75f);  
+    public static void main(String[] args) {  
+        map.put(5， "C");  
+
+        new Thread("Thread1") {  
+            public void run() {  
+                map.put(7, "B");  
+                System.out.println(map);  
+            };  
+        }.start();  
+        new Thread("Thread2") {  
+            public void run() {  
+                map.put(3, "A);  
+                System.out.println(map);  
+            };  
+        }.start();        
+    }  
+}
+```
+
+
+
+![img](https://raw.githubusercontent.com/huwd5620125/my_pic_pool/master/img/fa10635a66de637fe3cbd894882ff0c7_720w.png)
+
+> 如果在jdk7的环境下,
+>
+> 其中，map初始化为一个长度为2的数组，loadFactor=0.75，threshold=2*0.75=1，也就是说当put第二个key的时候，map就需要进行resize。
+>
+> 我们可以看之前的transfer方法
+>
+> 通过设置断点让线程1和线程2同时debug到transfer方法(3.3小节代码块)的首行。注意此时两个线程已经成功添加数据。放开thread1的断点至transfer方法的“Entry next = e.next;” 这一行；然后放开线程2的的断点，让线程2进行resize。结果如下图。
+
+![img](https://pic4.zhimg.com/80/fa10635a66de637fe3cbd894882ff0c7_720w.png)
+
+> 注意，Thread1的 e 指向了key(3)，而next指向了key(7)，其在线程二rehash后，指向了线程二重组后的链表。
+>
+> 线程一被调度回来执行，先是执行 newTalbe[i] = e， 然后是e = next，导致了e指向了key(7)，而下一次循环的next = e.next导致了next指向了key(3)。
+
+![img](https://pic2.zhimg.com/80/5f3cf5300f041c771a736b40590fd7b1_720w.png)
+
+> 于是，当我们用线程一调用map.get(11)时，悲剧就出现了——Infinite Loop。
+
+## 小总结
+
+> (1) 扩容是一个特别耗性能的操作，所以当程序员在使用HashMap的时候，估算map的大小，初始化的时候给一个大致的数值，避免map进行频繁的扩容。
+>
+> (2) 负载因子是可以修改的，也可以大于1，但是建议不要轻易修改，除非情况非常特殊。
+>
+> (3) HashMap是线程不安全的，不要在并发的环境中同时操作HashMap，建议使用ConcurrentHashMap。
+>
+> (4) JDK1.8引入红黑树大程度优化了HashMap的性能。
+>
+> (5) 还没升级JDK1.8的，现在开始升级吧。HashMap的性能提升仅仅是JDK1.8的冰山一角。
 
 https://zhuanlan.zhihu.com/p/21673805
