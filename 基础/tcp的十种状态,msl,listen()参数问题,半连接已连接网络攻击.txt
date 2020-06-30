@@ -1,0 +1,46 @@
+默认网关：设备之间通信时目标设备不再本网段 会交给网关 让网关去寻找
+
+
+TCP十种状态：
+建立连接三次握手时的状态：
+client                        server
+                             LISTEN（监听）
+SYN_SENT(请求)               SYN_RECV(等待客户端连接)
+ESTABLISHED（确定连接）	     ESTABLISHED（确认连接）
+四次挥手：
+FIN_WAIT1(关闭连接1)   
+			     CLOSE_WAIT（确认）
+FIN_WAIT2（关闭连接2）       LAST_ACK（最后一次确认）
+TIME_WAIT （msl时间等待）
+CLOSED（关闭）                CLOSED（关闭）
+
+
+MSL：数据包存活时间
+2MSL:两倍的 
+
+
+listen()参数问题：
+listen()在windows和linux中的不同应用:
+
+主动套接字转为被动套接字，只用作于监听是否连接，可以由5个客户端链接,
+
+Tcp_socket.listen(5)
+在windows中必须释放后才能连接下个客户端，而linux中则可以一起连接多个而不受限制，(linux内核原因)。
+尤其web大型服务器用linux的理由
+
+
+半连接和已连接
+listen(1000) #即两个队列中加起来的值不可超过1000
+半连接:tcp第一次握手
+已连接：已经可以传输数据的。
+
+常见网络攻击：
+TCP半连接攻击(DDOS)拒绝服务攻击：
+同一时间发送多个请求链接，不回应服务器的握手确认。使半连接的队列溢出。就产生了正常用户访问不了该网站
+
+DNS 域名欺骗攻击：
+DNS通过UDP传输。
+
+python使用原始套接字可创造任何攻击，无法无天。
+
+并发服务器：
