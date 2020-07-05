@@ -19,7 +19,32 @@
     public HashMap() {
         this.loadFactor = DEFAULT_LOAD_FACTOR; // all other fields defaulted
     }
+
+    public HashMap(Map<? extends K, ? extends V> m) {
+        this.loadFactor = DEFAULT_LOAD_FACTOR;
+        putMapEntries(m, false);
+    }
+
+    public HashMap(int initialCapacity) {
+        this(initialCapacity, DEFAULT_LOAD_FACTOR);
+    }
+
+    public HashMap(int initialCapacity, float loadFactor) {
+        if (initialCapacity < 0)
+            throw new IllegalArgumentException("Illegal initial capacity: " +
+                                               initialCapacity);
+        if (initialCapacity > MAXIMUM_CAPACITY)
+            initialCapacity = MAXIMUM_CAPACITY;
+        if (loadFactor <= 0 || Float.isNaN(loadFactor))
+            throw new IllegalArgumentException("Illegal load factor: " +
+                                               loadFactor);
+        this.loadFactor = loadFactor;
+        this.threshold = tableSizeFor(initialCapacity);
+    }
+
 ```
+
+
 
 ### put方法
 
@@ -234,7 +259,7 @@ hash实际上是三步的,取key的hashCode值、高位运算、取模运算。
         if (newThr == 0) {//就是说oldthr>0的时候且oldCap=0(就是说初始化resize的时候,且设置了长度),那么newThr到目前为止都没有被扩容过,则使用我们初始化时设置的负载因子
             float ft = (float)newCap * loadFactor;//计算当前的阈值
             newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ?
-                      (int)ft : Integer.MAX_VALUE);//判断,当当前的数组容量小于2^30并且新计算的阈值也小于2^30时,则使用新计算的阈值,否则使用2^32-1
+                      (int)ft : Integer.MAX_VALUE);//判断,当前的数组容量小于2^30并且新计算的阈值也小于2^30时,则使用新计算的阈值,否则使用2^32-1
         }
         threshold = newThr;//将新得到的阈值复制给类变量threshold
         @SuppressWarnings({"rawtypes","unchecked"})
