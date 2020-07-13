@@ -20,13 +20,13 @@
 
 ### 方法区(Method Area)
 
-> 存储元信息,**~~永久代~~**(Permanent Genertion),从JDK1.8开始,~~废弃~~,使用**元空间(meta space)**
+> 存储元信息,**~~永久代~~**(Permanent Genertion),从JDK1.8开始,~~废弃~~,使用**元空间(metaSpace)**
 
 #### 运行时常量池
 
 ### 直接内存(Direct Meory)
 
-> 与Java NIO密切相关,JVM通过堆上的DirectByteBuffer来操作直接内存
+> 与**JavaNIO**密切相关,JVM通过堆上的**DirectByteBuffer**来操作直接内存
 
 ## 关于java对象的创建过程
 
